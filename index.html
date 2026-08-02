@@ -561,14 +561,14 @@ window.APPEAL = {
   // complete or authoritative directory and MUST be replaced by the real
   // per-state payer dataset before this is anything other than a mockup.
   insurersByState: {
-    "California": ["Blue Shield of California", "Anthem Blue Cross", "Kaiser Permanente", "Health Net"],
+    "California": ["Blue Shield of California", "Anthem Blue Cross", "Health Net"],
     "Michigan": ["BCBS Michigan", "Priority Health", "HAP (Health Alliance Plan)"],
     "North Carolina": ["BCBS North Carolina", "Aetna", "UnitedHealthcare"],
     "New Jersey": ["Horizon BCBS NJ", "Aetna", "UnitedHealthcare"],
     "Pennsylvania": ["Independence Blue Cross", "Highmark", "UPMC Health Plan", "Aetna"],
-    "Washington": ["Premera Blue Cross", "Regence BCBS", "Kaiser Permanente"],
+    "Washington": ["Premera Blue Cross", "Regence BCBS"],
     "Maryland": ["CareFirst BCBS", "Aetna", "UnitedHealthcare"],
-    "District of Columbia": ["CareFirst BCBS", "Aetna", "Kaiser Permanente"],
+    "District of Columbia": ["CareFirst BCBS", "Aetna"],
     "Virginia": ["CareFirst BCBS", "Anthem", "Aetna", "UnitedHealthcare"],
     "Iowa": ["Wellmark BCBS", "UnitedHealthcare", "Aetna"],
   },
@@ -579,7 +579,8 @@ window.APPEAL = {
   // is near the top; together these cover the great majority of insured
   // Americans. Source: the payer covered-lives table in the internal benchmark
   // workbook (UnitedHealthcare 49.3M, Elevance/Anthem 45.7M, Centene 28.6M,
-  // Aetna 27.1M, Cigna 19.1M, HCSC 18M, Humana 16.3M, plus Kaiser, Molina).
+  // Aetna 27.1M, Cigna 19.1M, HCSC 18M, Humana 16.3M, Molina). Kaiser is
+  // intentionally omitted (its integrated-HMO denials are out of scope here).
   // NOTE: still a national fallback, not an authoritative per-state directory —
   // a real per-state payer-availability dataset is still needed for that.
   insurersGeneric: [
@@ -589,7 +590,6 @@ window.APPEAL = {
     "Aetna (CVS Health)",
     "Cigna",
     "Humana",
-    "Kaiser Permanente",
     "Centene / Ambetter",
     "Molina Healthcare",
     "Medicare",
@@ -621,6 +621,47 @@ window.APPEAL = {
       "Open your 'Summary of Benefits and Coverage (SBC)' and download the PDF.",
       "Can't find it? Call the Member Services number on your card and ask them to send it.",
     ],
+  },
+
+  // BLUE CROSS / BLUE SHIELD is not one company — each state has its own Blue
+  // licensee with its own website. When a patient picks a Blue plan we look up
+  // their state here and send them to the RIGHT site by name, instead of a
+  // generic "your state's Blue site". (Anthem-branded Blues are handled by the
+  // 'anthem' rule; Florida Blue and the HCSC states have their own entries too.)
+  // Not exhaustive — states missing here fall back to a "search your state's
+  // Blue Cross Blue Shield" instruction. name = the licensee, site = its portal.
+  blueByState: {
+    "Alabama": { name: "Blue Cross Blue Shield of Alabama", site: "bcbsal.org" },
+    "Arizona": { name: "Blue Cross Blue Shield of Arizona", site: "azblue.com" },
+    "Arkansas": { name: "Arkansas Blue Cross Blue Shield", site: "arkansasbluecross.com" },
+    "California": { name: "Blue Shield of California", site: "blueshieldca.com" },
+    "Florida": { name: "Florida Blue", site: "floridablue.com" },
+    "Hawaii": { name: "Hawaii Medical Service Association (BCBS)", site: "hmsa.com" },
+    "Idaho": { name: "Blue Cross of Idaho", site: "bcidaho.com" },
+    "Illinois": { name: "Blue Cross Blue Shield of Illinois", site: "bcbsil.com" },
+    "Iowa": { name: "Wellmark Blue Cross Blue Shield", site: "wellmark.com" },
+    "Kansas": { name: "Blue Cross Blue Shield of Kansas", site: "bcbsks.com" },
+    "Louisiana": { name: "Blue Cross Blue Shield of Louisiana", site: "bcbsla.com" },
+    "Maryland": { name: "CareFirst BlueCross BlueShield", site: "carefirst.com" },
+    "Massachusetts": { name: "Blue Cross Blue Shield of Massachusetts", site: "bluecrossma.org" },
+    "Michigan": { name: "Blue Cross Blue Shield of Michigan", site: "bcbsm.com" },
+    "Minnesota": { name: "Blue Cross Blue Shield of Minnesota", site: "bluecrossmn.com" },
+    "Mississippi": { name: "Blue Cross Blue Shield of Mississippi", site: "bcbsms.com" },
+    "Montana": { name: "Blue Cross Blue Shield of Montana", site: "bcbsmt.com" },
+    "Nebraska": { name: "Blue Cross Blue Shield of Nebraska", site: "nebraskablue.com" },
+    "New Jersey": { name: "Horizon Blue Cross Blue Shield of New Jersey", site: "horizonblue.com" },
+    "New Mexico": { name: "Blue Cross Blue Shield of New Mexico", site: "bcbsnm.com" },
+    "North Carolina": { name: "Blue Cross Blue Shield of North Carolina", site: "bluecrossnc.com" },
+    "Oklahoma": { name: "Blue Cross Blue Shield of Oklahoma", site: "bcbsok.com" },
+    "Pennsylvania": { name: "Independence Blue Cross (eastern PA) or Highmark (western PA)", site: "ibx.com / highmark.com" },
+    "Rhode Island": { name: "Blue Cross Blue Shield of Rhode Island", site: "bcbsri.com" },
+    "South Carolina": { name: "BlueCross BlueShield of South Carolina", site: "southcarolinablues.com" },
+    "Tennessee": { name: "BlueCross BlueShield of Tennessee", site: "bcbst.com" },
+    "Texas": { name: "Blue Cross Blue Shield of Texas", site: "bcbstx.com" },
+    "Vermont": { name: "Blue Cross Blue Shield of Vermont", site: "bluecrossvt.org" },
+    "Virginia": { name: "Anthem / CareFirst (depending on your plan)", site: "carefirst.com / anthem.com" },
+    "Washington": { name: "Premera Blue Cross or Regence BlueShield", site: "premera.com / regence.com" },
+    "Wyoming": { name: "Blue Cross Blue Shield of Wyoming", site: "bcbswy.com" },
   },
 
   // CONSERVATIVE-CARE questions: the four things a patient may have tried
@@ -1326,8 +1367,30 @@ window.APPEAL = {
       if (has('molina')) return acc.molina;
       if (has('florida blue', 'guidewell')) return acc.floridablue;
       if (has('medicare')) return acc.medicare;
-      // HCSC / any Blue Cross Blue Shield plan → the state-Blue instructions.
-      if (has('blue cross', 'bcbs', 'blue shield', 'hcsc')) return acc.hcsc;
+      // Blue Cross / Blue Shield is not one company — each state has its own
+      // licensee and its own website. Send the patient to THEIR state's Blue
+      // site by name when we know it; otherwise a generic Blue instruction.
+      if (has('blue cross', 'bcbs', 'blue shield', 'hcsc')) {
+        const b = (D.blueByState || {})[A.state];
+        if (b) return {
+          portal: b.site,
+          phone: 'The Member Services number on your ID card',
+          steps: [
+            'Go to ' + b.site + ' (' + b.name + ') and Log In — first time, Register with the member ID on your card.',
+            "Open 'My Coverage' / 'Benefits' / 'Plan Documents'.",
+            'Download your Summary of Benefits and Coverage (SBC) or Benefit Booklet.',
+          ],
+        };
+        return {
+          portal: "your state's Blue Cross Blue Shield site",
+          phone: 'The Member Services number on your ID card',
+          steps: [
+            'Search "' + (A.state || 'your state') + ' Blue Cross Blue Shield" and open your plan\'s official site, then Log In.',
+            "Open 'My Coverage' / 'Benefits' / 'Plan Documents'.",
+            'Download your Summary of Benefits and Coverage (SBC) or Benefit Booklet.',
+          ],
+        };
+      }
       return null;
     }
 
